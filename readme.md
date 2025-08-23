@@ -52,7 +52,7 @@
       </td>
       <td>
         <a href="https://bmb-pair-site.onrender.com/QR" target="_blank">
-           <img src="https://img.shields.io/badge/QR_CODE-00FFFF?style=for-the-badge&logo=whatsapp&logoColor=white&labelColor=1a1a1a"/>
+           <img src="https://img.shields.io/badge/QR_CODE SITE-00FFFF?style=for-the-badge&logo=whatsapp&logoColor=white&labelColor=1a1a1a"/>
         </a>
       </td>
     </tr>
