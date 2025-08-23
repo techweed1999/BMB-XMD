@@ -60,7 +60,7 @@
 </div>
 ---
 
-#### 🟣 Heroku
+#### 🟣 DEPLOYMENT PLAN
 
 ---
 <div align="center">
