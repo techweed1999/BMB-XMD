@@ -1,126 +1,290 @@
-const axios = require("axios");
-const { bmbtz } = require(__dirname + "/../devbmb/bmbtz");
-const { format } = require(__dirname + "/../devbmb/mesfonctions");
-const os = require('os');
-const moment = require("moment-timezone");
-const settings = require(__dirname + "/../settings");
-const { repondre } = require(__dirname + "/../devbmb/context");
-const { fetchGitHubStats } = require(__dirname + "/bmbtech");
-const { showLoadingAnimation } = require(__dirname + "/song");
+const { bmbtz } = require("../devbmb/bmbtz");
+const axios = require('axios');
+const yts = require('yt-search');
 
-const readMore = String.fromCharCode(8206).repeat(4001);
+const BASE_URL = 'https://noobs-api.top';
 
-const formatUptime = (seconds) => {
-    seconds = Number(seconds);
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
+const BOT_NAME = 'B.M.B-TECH'; // Change as you want
+const NEWSLETTER_JID = '120363382023564830@newsletter';
+const NEWSLETTER_NAME = 'Bmb Tech Info';
 
-    return [
-        days > 0 ? `${days} ${days === 1 ? "day" : "days"}` : '',
-        hours > 0 ? `${hours} ${hours === 1 ? "hour" : "hours"}` : '',
-        minutes > 0 ? `${minutes} ${minutes === 1 ? "minute" : "minutes"}` : '',
-        remainingSeconds > 0 ? `${remainingSeconds} ${remainingSeconds === 1 ? "second" : "seconds"}` : ''
-    ].filter(Boolean).join(', ');
+const buildCaption = (type, video) => {
+  const banner = type === "video" ? `${BOT_NAME} VIDEO PLAYER` : `${BOT_NAME} SONG PLAYER`;
+  return (
+    `*${banner}*\n\n` +
+    `╭───────────────◆\n` +
+    `│⿻ *Title:* ${video.title}\n` +
+    `│⿻ *Duration:* ${video.timestamp}\n` +
+    `│⿻ *Views:* ${video.views.toLocaleString()}\n` +
+    `│⿻ *Uploaded:* ${video.ago}\n` +
+    `│⿻ *Channel:* ${video.author.name}\n` +
+    `╰────────────────◆\n\n` +
+    `🔗 ${video.url}`
+  );
 };
+// getContextInfo now takes query and botName, and includes body and title
+const getContextInfo = (query = '', botName = BOT_NAME) => ({
+  forwardingScore: 1,
+  isForwarded: true,
+  forwardedNewsletterMessageInfo: {
+    newsletterJid: NEWSLETTER_JID,
+    newsletterName: NEWSLETTER_NAME,
+    serverMessageId: -1
+  },
+  // Added fields as requested
+  body: query ? `Requested song: ${query}` : undefined,
+  title: botName
+}); 
 
-// Function to handle ping button
-const handlePingButton = async (dest, zk) => {
-    await showLoadingAnimation(dest, zk); // Use the showLoadingAnimation from System.js
-    zk.sendMessage(dest, { text: "Ping results sent!" });
-};
+const buildDownloadingCaption = () => (
+  `*${BOT_NAME}*\n\n` +
+  `⏬ Downloading your request...`
+);
 
-// Function to handle repo info button
-const handleRepoButton = async (dest, zk) => {
+// PLAY COMMAND (audio)
+bmbtz(
+  { nomCom: "play3", categorie: "Search", reaction: "🎵" },
+  async (origineMessage, zk, commandeOptions) => {
+    const { ms, arg } = commandeOptions;
+    const query = arg.join(' ');
+    if (!query)
+      return zk.sendMessage(
+        origineMessage,
+        { text: 'Please provide a song name or keyword.', contextInfo: getContextInfo() },
+        { quoted: ms }
+      );
+
     try {
-        const { stars, forks, totalUsers } = await fetchGitHubStats(); // Use fetchGitHubStats from beltahh.js
-        const message = `
-Repo Information:
-⭐ Stars: ${stars}
-🍴 Forks: ${forks}
-👥 Total Users: ${totalUsers}
-        `;
-        zk.sendMessage(dest, { text: message });
-    } catch (error) {
-        console.error("Error fetching repo info:", error);
-        zk.sendMessage(dest, { text: "Failed to fetch repository information." });
-    }
-};
+      const search = await yts(query);
+      const video = search.videos[0];
 
-// Function to handle uptime button
-const handleUptimeButton = async (dest, zk) => {
-    const botUptime = process.uptime(); // Get the bot uptime in seconds
-    const formattedUptime = formatUptime(botUptime);
+      if (!video)
+        return zk.sendMessage(
+          origineMessage,
+          { text: 'No results found for your query.', contextInfo: getContextInfo() },
+          { quoted: ms }
+        );
 
-    zk.sendMessage(dest, {
-        text: `🤖 Bot Uptime: ${formattedUptime}`
-    });
-};
+      const safeTitle = video.title.replace(/[\\/:*?"<>|]/g, '');
+      const fileName = `${safeTitle}.mp3`;
+      const apiURL = `${BASE_URL}/dipto/ytDl3?link=${encodeURIComponent(video.videoId)}&format=mp3`;
 
-// Function to handle owner button
-const handleOwnerButton = async (dest, zk) => {
-    const ownerjid = settings.NUMERO_OWNER.replace(/[^0-9]/g) + "@s.whatsapp.net";
-    const vcard =
-        'BEGIN:VCARD\n' +
-        'VERSION:3.0\n' +
-        `FN:${settings.OWNER_NAME}\n` +
-        'ORG:undefined;\n' +
-        `TEL;type=CELL;type=VOICE;waid=${settings.NUMERO_OWNER}:+${settings.NUMERO_OWNER}\n` +
-        'END:VCARD';
+      const response = await axios.get(apiURL);
+      const data = response.data;
 
-    zk.sendMessage(dest, {
-        contacts: {
-            displayName: settings.OWNER_NAME,
-            contacts: [{ vcard }],
+      if (!data.downloadLink)
+        return zk.sendMessage(
+          origineMessage,
+          { text: 'Failed to retrieve the MP3 download link.', contextInfo: getContextInfo() },
+          { quoted: ms }
+        );
+
+// Send caption with thumbnail first, ensure renderSmallThumbnail: true
+      await zk.sendMessage(
+        origineMessage,
+        {
+          image: { url: video.thumbnail, renderSmallThumbnail: true },
+          caption: buildCaption('audio', video),
+          contextInfo: getContextInfo(query)
         },
-    });
-};
+        { quoted: ms }
+      );
 
-// Define the menus command with buttons
-bmbtz({ nomCom: "list", aliases: ["liste", "helplist", "commandlist"], categorie: "SYSTEM" }, async (message, client, config) => {
-    const { ms, respond, prefix, nomAuteurMessage } = config;
-    moment.tz.setDefault("Africa/Nairobi");
-    const currentTime = moment();
-    const formattedTime = currentTime.format("HH:mm:ss");
-    const formattedDate = currentTime.format("DD/MM/YYYY");
-    const currentHour = currentTime.hour();
+      // Send downloading message
+      await zk.sendMessage(
+        origineMessage,
+        {
+          text: buildDownloadingCaption(),
+          contextInfo: getContextInfo()
+        },
+        { quoted: ms }
+      );
 
-    const greetings = ["Good Morning 🌄", "Good Afternoon 🌅", "Good Evening ⛅", "Good Night 🌙"];
-    const greeting = currentHour < 12 ? greetings[0] : currentHour < 17 ? greetings[1] : currentHour < 21 ? greetings[2] : greetings[3];
+      // Send mp3 with body and title, and include image with renderSmallThumbnail
+      await zk.sendMessage(
+        origineMessage,
+        {
+          audio: { url: data.downloadLink },
+          mimetype: 'audio/mpeg',
+          fileName,
+          title: BOT_NAME,
+          body: `Requested song :${query}`,
+          image: { url: video.thumbnail, renderSmallThumbnail: true }, 
+          contextInfo: getContextInfo() 
+        },
+        { quoted: ms }
+      );
 
-    const messageWithButtons = {
-        text: `
-${greeting}, *${nomAuteurMessage || "User"}*
+    } catch (err) {
+      console.error('[PLAY] Error:', err);
+      await zk.sendMessage(
+        origineMessage,
+        { text: 'An error occurred while processing your request.', contextInfo: getContextInfo() },
+        { quoted: ms }
+      );
+    }
+  }
+);
 
-💡 Select an option:
-1️⃣ Check Ping
-2️⃣ View Repo Info
-3️⃣ Bot Uptime
-4️⃣ Contact Owner
-        `,
-        buttons: [
-            { buttonId: 'ping_button', buttonText: { displayText: 'Check Ping' }, type: 1 },
-            { buttonId: 'repo_button', buttonText: { displayText: 'View Repo Info' }, type: 1 },
-            { buttonId: 'uptime_button', buttonText: { displayText: 'Bot Uptime' }, type: 1 },
-            { buttonId: 'owner_button', buttonText: { displayText: 'Contact Owner' }, type: 1 }
-        ],
-        headerType: 1
-    };
+// SONG COMMAND (audio as document)
+bmbtz(
+  { nomCom: "song3", categorie: "Search", reaction: "🎶" },
+  async (origineMessage, zk, commandeOptions) => {
+    const { ms, arg } = commandeOptions;
+    const query = arg.join(' ');
+    if (!query)
+      return zk.sendMessage(
+        origineMessage,
+        { text: 'Please provide a song name or keyword.', contextInfo: getContextInfo() },
+        { quoted: ms }
+      );
 
-    await client.sendMessage(message.chatId, messageWithButtons, { quoted: ms });
+    try {
+      const search = await yts(query);
+      const video = search.videos[0];
 
-    // Listen for button responses
-    client.on('button_click', async (button) => {
-        if (button.buttonId === 'ping_button') {
-            await handlePingButton(button.chatId, client);
-        } else if (button.buttonId === 'repo_button') {
-            await handleRepoButton(button.chatId, client);
-        } else if (button.buttonId === 'uptime_button') {
-            await handleUptimeButton(button.chatId, client);
-        } else if (button.buttonId === 'owner_button') {
-            await handleOwnerButton(button.chatId, client);
-        }
-    });
-});
-                                     
+      if (!video)
+        return zk.sendMessage(
+          origineMessage,
+          { text: 'No results found for your query.', contextInfo: getContextInfo() },
+          { quoted: ms }
+        );
+
+      const safeTitle = video.title.replace(/[\\/:*?"<>|]/g, '');
+      const fileName = `${safeTitle}.mp3`;
+      const apiURL = `${BASE_URL}/dipto/ytDl3?link=${encodeURIComponent(video.videoId)}&format=mp3`;
+
+      const response = await axios.get(apiURL);
+      const data = response.data;
+
+      if (!data.downloadLink)
+        return zk.sendMessage(
+          origineMessage,
+          { text: 'Failed to retrieve the MP3 download link.', contextInfo: getContextInfo() },
+          { quoted: ms }
+        );
+
+      // Send caption with thumbnail first
+      await zk.sendMessage(
+        origineMessage,
+        {
+          image: { url: video.thumbnail },
+          caption: buildCaption('song', video),
+          contextInfo: getContextInfo()
+        },
+        { quoted: ms }
+      );
+
+      // Send downloading message
+      await zk.sendMessage(
+        origineMessage,
+        {
+          text: buildDownloadingCaption(),
+          contextInfo: getContextInfo()
+        },
+        { quoted: ms }
+      );
+
+      // Send mp3 as document
+      await zk.sendMessage(
+        origineMessage,
+        {
+          document: { url: data.downloadLink },
+          mimetype: 'audio/mpeg',
+          fileName
+        },
+        { quoted: ms }
+      );
+
+    } catch (err) {
+      console.error('[SONG] Error:', err);
+      await zk.sendMessage(
+        origineMessage,
+        { text: 'An error occurred while processing your request.', contextInfo: getContextInfo() },
+        { quoted: ms }
+      );
+    }
+  }
+);
+
+// VIDEO COMMAND (mp4)
+bmbtz(
+  { nomCom: "video3", categorie: "Search", reaction: "🎬" },
+  async (origineMessage, zk, commandeOptions) => {
+    const { ms, arg } = commandeOptions;
+    const query = arg.join(' ');
+    if (!query)
+      return zk.sendMessage(
+        origineMessage,
+        { text: 'Please provide a video name or keyword.', contextInfo: getContextInfo() },
+        { quoted: ms }
+      );
+
+    try {
+      const search = await yts(query);
+      const video = search.videos[0];
+
+      if (!video)
+        return zk.sendMessage(
+          origineMessage,
+          { text: 'No results found for your query.', contextInfo: getContextInfo() },
+          { quoted: ms }
+        );
+
+      const safeTitle = video.title.replace(/[\\/:*?"<>|]/g, '');
+      const fileName = `${safeTitle}.mp4`;
+      const apiURL = `${BASE_URL}/dipto/ytDl3?link=${encodeURIComponent(video.videoId)}&format=mp4`;
+
+      const response = await axios.get(apiURL);
+      const data = response.data;
+
+      if (!data.downloadLink)
+        return zk.sendMessage(
+          origineMessage,
+          { text: 'Failed to retrieve the MP4 download link.', contextInfo: getContextInfo() },
+          { quoted: ms }
+        );
+
+      // Send caption with thumbnail first
+      await zk.sendMessage(
+        origineMessage,
+        {
+          image: { url: video.thumbnail },
+          caption: buildCaption('video', video),
+          contextInfo: getContextInfo()
+        },
+        { quoted: ms }
+      );
+
+      // Send downloading message
+      await zk.sendMessage(
+        origineMessage,
+        {
+          text: buildDownloadingCaption(),
+          contextInfo: getContextInfo()
+        },
+        { quoted: ms }
+      );
+
+      // Send video
+      await zk.sendMessage(
+        origineMessage,
+        {
+          video: { url: data.downloadLink },
+          mimetype: 'video/mp4',
+          fileName
+        },
+        { quoted: ms }
+      );
+
+    } catch (err) {
+      console.error('[VIDEO] Error:', err);
+      await zk.sendMessage(
+        origineMessage,
+        { text: 'An error occurred while processing your request.', contextInfo: getContextInfo() },
+        { quoted: ms }
+      );
+    }
+  }
+); 
+    
