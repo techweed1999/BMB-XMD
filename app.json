@@ -2,7 +2,7 @@
   "name": "B.M.B-TECH",
   "description": "ʙᴇsᴛ ᴡʜᴀᴛsᴀᴘᴘ ʙᴏᴛ ᴅᴇᴠᴇʟᴏᴘᴇᴅ ʙʏ ʙᴍʙ ᴛᴇᴄʜ 🇹🇿",
   "keywords": ["bot", "node", "baileys", "whatsapp"],
-  "logo": "https://files.catbox.moe/uol78i.jpg",
+  "logo": "https://files.catbox.moe/hflcbc.jpg",
   "repository": "https://github.com/ekitale/maths-project",
   "succes_url": "/",
   "stack": "heroku-24",
@@ -23,7 +23,7 @@
       "required": false
     },
     "AUTO_READ": {
-      "description": "Your contact will be read messages automatically(type yes to active or no to deactive ; don't write in capital letter)",
+      "description": "Your contact  will be read messages automatically(type yes to active or no to deactive ; don't write in capital letter)",
       "value": "no",
       "required": false
     },
@@ -54,7 +54,7 @@
     },
     "BOT_MENU_LINKS": {
       "description": "add one or many link for your bot menu  ; eg : url1,url2,url3.....",
-      "value": "https://files.catbox.moe/uol78i.jpg",
+      "value": "https://files.catbox.moe/hflcbc.jpg",
       "required": false
     },
     "PUBLIC_MODE": {
@@ -118,11 +118,6 @@
     },
     "AUTO_BIO": {
       "description": "Enable automatic bio update (yes = active, no = deactive)",
-      "value": "yes",
-      "required": false
-    },
-    "AUDIO_REPLY": {
-      "description": "Enable automatic audio replies (yes = active, no = deactive)",
       "value": "no",
       "required": false
     }
@@ -132,10 +127,10 @@
       "url": "heroku/nodejs"
     },
     {
-      "url": "https://github.com/clhuang/heroku-buildpack-webp-binaries.git"
+      "url": "https://github.com/heroku/heroku-buildpack-nodejs.git"
     },
     {
-      "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest"
+      "url": "https://github.com/heroku/heroku-buildpack-nodejs.git"
     }
   ]
-}
+    }
